@@ -7,6 +7,7 @@ import { listActiveEffects } from '@/logic/buffs';
 import { RoomBonus as RoomBonusType, StatusEffect, Resource } from '@/types';
 import { upsertResource } from '@/db/db';
 import { processPerfectDay } from '@/logic/prestige';
+import { PrestigeModal } from '@/components/PrestigeModal';
 
 const METRICS: Array<keyof Pick<Resource, 'energy'|'stress'|'focus'|'health'|'sleepDebt'|'nutritionScore'|'mood'|'clarity'>> = [
   'energy',
@@ -33,8 +34,12 @@ export default function EndOfDayScreen() {
   const buildId = useStore(s => s.buildId);
   const prestigeCaps = useStore(s => s.prestige.caps);
   const keystones = useStore(s => s.prestige.keystones);
+  const prestige = useStore(s => s.prestige);
   const setPrestige = useStore(s => s.setPrestige);
+  const recordPerfectDay = useStore(s => s.recordPerfectDay);
   const addShard = useStore(s => s.addShard);
+  const pendingPrestigeReward = useStore(s => s.pendingPrestigeReward);
+  const setPendingPrestigeReward = useStore(s => s.setPendingPrestigeReward);
   const loadTimeline = useTimelineStore(s => s.loadTimeline);
 
   const [roomBonusState, setRoomBonusState] = useState<RoomBonusType>(DEFAULT_ROOM_BONUS);
@@ -42,6 +47,7 @@ export default function EndOfDayScreen() {
   const [loading, setLoading] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const animation = useRef(new Animated.Value(0)).current;
+  const [showPrestigeModal, setShowPrestigeModal] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -76,6 +82,12 @@ export default function EndOfDayScreen() {
       animation.setValue(1);
     }
   }, [animation, reduceMotion]);
+
+  useEffect(() => {
+    if (pendingPrestigeReward) {
+      setShowPrestigeModal(true);
+    }
+  }, [pendingPrestigeReward]);
 
   const preview = useMemo(() => {
     const options: SettleOptions = { effects, roomBonus: roomBonusState, buildId, caps: prestigeCaps, keystones };
@@ -112,8 +124,18 @@ export default function EndOfDayScreen() {
       if (settled.focus >= 85) addShard('focusShard', 1);
       if (settled.clarity >= 3) addShard('clarityShard', 1);
       const perfect = isPerfectDay(settled);
+      recordPerfectDay(`${resource.date}T00:00:00+08:00`, perfect);
       if (perfect) {
-        setPrestige(prev => processPerfectDay(prev).next);
+        const result = processPerfectDay(prestige);
+        setPrestige(() => result.next);
+        if (result.next.level > prestige.level || result.unlocked) {
+          setPendingPrestigeReward({
+            level: result.next.level,
+            caps: result.next.caps,
+            keystoneId: result.unlocked?.id,
+            keystoneName: result.unlocked?.name,
+          });
+        }
       }
       if (!reduceMotion) {
         animation.setValue(0);
@@ -166,6 +188,14 @@ export default function EndOfDayScreen() {
       <TouchableOpacity onPress={handleSettle} style={styles.cta} disabled={loading}>
         {loading ? <ActivityIndicator color="#0b0f1a"/> : <Text style={styles.ctaText}>結算今日</Text>}
       </TouchableOpacity>
+      <PrestigeModal
+        visible={showPrestigeModal}
+        reward={pendingPrestigeReward}
+        onClose={() => {
+          setShowPrestigeModal(false);
+          setPendingPrestigeReward(undefined);
+        }}
+      />
     </View>
   );
 }

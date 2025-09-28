@@ -3,6 +3,7 @@ import { resolveBalance } from '@/config/remote';
 import { applyDelta, getMetricKeys, getMetricLimits } from '@/logic/delta';
 import { DailyEvents } from '@/data/events';
 import { takeQueued, queueChain, queueCrisis, getChainStage } from '@/logic/eventQueue';
+import { useStore } from '@/state/store';
 import { createSeededRng, hashSeed } from '@/utils/prng';
 
 const METRIC_KEYS = getMetricKeys();
@@ -77,10 +78,11 @@ export function selectEventCard(
   resource: Resource,
   deck: EventCard[] = DailyEvents,
   seed: string = date,
-  difficultyMode: 'ease'|'normal'|'elite' = 'normal',
+  difficultyMode?: 'ease'|'normal'|'elite',
 ): EventSelection | null {
   const nowIso = new Date().toISOString();
   const dayId = date;
+  const mode = difficultyMode ?? useStore.getState().difficultyMode ?? 'normal';
   let queued = takeQueued(nowIso, dayId);
   while (queued) {
     const card = deck.find(c => c.id === queued.id);
@@ -112,7 +114,7 @@ export function selectEventCard(
   const rng = createSeededRng(hashSeed(seed));
   const totalWeight = filtered.reduce((sum, card) => {
     let weight = weightFor(card);
-    if (difficultyMode === 'ease') {
+    if (mode === 'ease') {
       if (card.crisis) weight *= 0.8;
       if (card.rescue) weight *= 1.2;
     }
@@ -121,7 +123,7 @@ export function selectEventCard(
   let roll = rng() * totalWeight;
   for (const card of filtered) {
     let weight = weightFor(card);
-    if (difficultyMode === 'ease') {
+    if (mode === 'ease') {
       if (card.crisis) weight *= 0.8;
       if (card.rescue) weight *= 1.2;
     }

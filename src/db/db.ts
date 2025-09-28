@@ -392,3 +392,33 @@ export function clearTimeline(date: string): Promise<void> {
     });
   });
 }
+
+export function listResourcesInRange(startDate: string, endDate: string): Promise<Resource[]> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT * FROM resources WHERE date BETWEEN ? AND ? ORDER BY date ASC`,
+        [startDate, endDate],
+        (_, { rows }) => {
+          const out: Resource[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            const r = rows.item(i);
+            out.push({
+              date: r.date,
+              energy: r.energy,
+              stress: r.stress,
+              focus: r.focus,
+              health: r.health,
+              sleepDebt: r.sleepDebt,
+              nutritionScore: r.nutritionScore,
+              mood: r.mood,
+              clarity: r.clarity,
+            });
+          }
+          resolve(out);
+        },
+        (_, err) => { reject(err); return false; }
+      );
+    });
+  });
+}

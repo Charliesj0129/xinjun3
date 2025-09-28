@@ -157,5 +157,18 @@ export type RitualRecipe = {
   description: string;
   inputs: ShardType[];
   cooldownHours: number;
+  window?: 'am'|'pm'|'evening';
+  steps: string[];
+  benefits: string[];
+  durationMinutes: number;
   effect: StatusEffect;
+};
+
+export type DifficultyMode = 'ease'|'normal'|'elite';
+
+export type PrestigeReward = {
+  level: number;
+  caps: PrestigeState['caps'];
+  keystoneId?: string;
+  keystoneName?: string;
 };

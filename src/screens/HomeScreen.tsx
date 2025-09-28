@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, AccessibilityInfo, Pressable, Activ
 import { useStore } from '@/state/store';
 import { ResourceBar } from '@/components/ResourceBar';
 import { initDb, upsertResource } from '@/db/db';
+import { PrestigeModal } from '@/components/PrestigeModal';
 import { useTimelineStore } from '@/state/timelineStore';
 import type { TimelineDelta, TimelineEntry } from '@/types';
 
@@ -13,8 +14,11 @@ export default function HomeScreen(){
   const timelineEntries = useTimelineStore(s => s.entries);
   const loadTimeline = useTimelineStore(s => s.loadTimeline);
   const loadingTimeline = useTimelineStore(s => s.loading);
+  const pendingPrestigeReward = useStore(s => s.pendingPrestigeReward);
+  const setPendingPrestigeReward = useStore(s => s.setPendingPrestigeReward);
   const [metric, setMetric] = useState<'energy'|'stress'|'focus'|'sleepDebt'|'nutritionScore'>('energy');
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [showPrestigeModal, setShowPrestigeModal] = useState(false);
 
   useEffect(()=>{
     initDb();
@@ -35,6 +39,12 @@ export default function HomeScreen(){
     };
   }, []);
 
+  useEffect(() => {
+    if (pendingPrestigeReward) {
+      setShowPrestigeModal(true);
+    }
+  }, [pendingPrestigeReward]);
+
   const metricOptions: { key: typeof metric; label: string }[] = [
     { key: 'energy', label: 'Energy' },
     { key: 'stress', label: 'Stress' },
@@ -50,6 +60,14 @@ export default function HomeScreen(){
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>基地總覽 · {today}</Text>
+      {pendingPrestigeReward && (
+        <Pressable style={styles.prestigeBanner} accessibilityRole="button" onPress={() => setShowPrestigeModal(true)}>
+          <View>
+            <Text style={styles.bannerTitle}>等級提升！</Text>
+            <Text style={styles.bannerBody}>Lv. {pendingPrestigeReward.level}，新上限已生效。</Text>
+          </View>
+        </Pressable>
+      )}
       <ResourceBar label="Energy" value={r.energy} />
       <ResourceBar label="Stress" value={r.stress} />
       <ResourceBar label="Focus" value={r.focus} />
@@ -115,6 +133,14 @@ export default function HomeScreen(){
         )}
         {!reduceMotion && <View style={styles.timelineHint}><Text style={styles.tip}>提示：長按時間軸條目可做詳細回顧（即將推出）。</Text></View>}
       </View>
+      <PrestigeModal
+        visible={showPrestigeModal}
+        reward={pendingPrestigeReward}
+        onClose={() => {
+          setShowPrestigeModal(false);
+          setPendingPrestigeReward(undefined);
+        }}
+      />
     </ScrollView>
   );
 }
@@ -180,5 +206,8 @@ const styles = StyleSheet.create({
   timelineTitle:{ color:'#e2e8f0', fontSize:15, marginBottom:4 },
   timelineDelta:{ color:'#cbd5f5', fontSize:13 },
   timelineHint:{ marginTop:8 },
-  subtitle:{ color:'#e2e8f0', fontSize:16, marginBottom:6 }
+  subtitle:{ color:'#e2e8f0', fontSize:16, marginBottom:6 },
+  prestigeBanner:{ backgroundColor:'#1d4ed8', borderRadius:12, padding:12, marginBottom:16, borderWidth:1, borderColor:'#3b82f6' },
+  bannerTitle:{ color:'#f8fafc', fontWeight:'700', fontSize:16 },
+  bannerBody:{ color:'#e0f2fe', marginTop:4 }
 });
