@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useStore } from '@/state/store';
-import { settleDay, roomBonus, SettleOptions } from '@/logic/calc';
+import { settleDay, roomBonus, SettleOptions, finalizeSettlement } from '@/logic/calc';
 import { listActiveEffects } from '@/logic/buffs';
 import { RoomBonus as RoomBonusType, StatusEffect, Resource } from '@/types';
 import { upsertResource } from '@/db/db';
@@ -65,8 +65,13 @@ export default function EndOfDayScreen() {
     if (loading) return;
     setLoading(true);
     try {
-      await upsertResource(preview);
-      setResource(preview);
+      const settled = await finalizeSettlement(resource, actions, {
+        effects,
+        roomBonus: roomBonusState,
+        actionsCount: actions.length,
+      });
+      await upsertResource(settled);
+      setResource(settled);
     } finally {
       setLoading(false);
     }

@@ -74,6 +74,7 @@ export type EventCard = {
 export type HabitKey = 'sleep'|'journal'|'exercise'|'meal';
 
 export type HabitStats = {
+  habit: HabitKey;
   date: string;
   streak: number;
   momentumStacks: number;
@@ -110,4 +111,11 @@ export type RoomBonus = {
   deskQuality: number;
   gymReady: boolean;
   kitchenPrep: boolean;
+};
+
+export type GameEvent = {
+  id: string;
+  createdAt: string;
+  type: string;
+  payload: Record<string, any>;
 };

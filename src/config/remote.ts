@@ -1,9 +1,16 @@
-import { Balance } from './balance';
+import { Balance, Momentum, DeltaCaps } from './balance';
+import { UpkeepRule } from '@/types';
+
+type RemoteMomentum = Partial<Omit<typeof Momentum, 'gainThresholdPerModule' | 'decayGraceDays' | 'addPerStack'>> & {
+  gainThresholdPerModule?: Partial<typeof Momentum.gainThresholdPerModule>;
+  decayGraceDays?: Partial<typeof Momentum.decayGraceDays>;
+  addPerStack?: Partial<typeof Momentum.addPerStack>;
+};
 
 type RemotePayload = {
-  guardrails?: Partial<typeof Balance.guardrails>;
-  momentum?: Partial<typeof Balance.momentum>;
-  upkeepRules?: typeof Balance.upkeepRules;
+  guardrails?: Partial<DeltaCaps>;
+  momentum?: RemoteMomentum;
+  upkeepRules?: UpkeepRule[];
   expiresAt?: string;
   version?: string;
 };
@@ -24,11 +31,39 @@ export function setRemoteBalanceConfig(config: RemoteBalanceConfig | null): void
   cache = config;
 }
 
+function mergeMomentum(remote?: RemoteMomentum) {
+  if (!remote) return Balance.momentum;
+  return {
+    ...Balance.momentum,
+    ...remote,
+    gainThresholdPerModule: {
+      ...Balance.momentum.gainThresholdPerModule,
+      ...(remote.gainThresholdPerModule ?? {}),
+    },
+    decayGraceDays: {
+      ...Balance.momentum.decayGraceDays,
+      ...(remote.decayGraceDays ?? {}),
+    },
+    addPerStack: {
+      ...Balance.momentum.addPerStack,
+      ...(remote.addPerStack ?? {}),
+    },
+  };
+}
+
+function mergeGuardrails(remote?: Partial<DeltaCaps>) {
+  if (!remote) return Balance.guardrails;
+  return {
+    ...Balance.guardrails,
+    ...remote,
+  };
+}
+
 export function resolveBalance() {
   const remote = cache?.payload ?? {};
   return {
-    guardrails: { ...Balance.guardrails, ...(remote.guardrails ?? {}) },
-    momentum: { ...Balance.momentum, ...(remote.momentum ?? {}) },
+    guardrails: mergeGuardrails(remote.guardrails),
+    momentum: mergeMomentum(remote.momentum),
     upkeepRules: remote.upkeepRules ?? Balance.upkeepRules,
   };
 }

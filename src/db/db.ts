@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Resource, ActionLog, RoomState, Rule, StatusEffect } from '@/types';
+import { Resource, ActionLog, RoomState, Rule, StatusEffect, HabitKey, HabitStats } from '@/types';
 
 const db = SQLite.openDatabase('xinjun3.db');
 export const database = db;
@@ -43,7 +43,13 @@ export function initDb() {
       lastActiveAt TEXT,
       decayGraceDays INTEGER
     );`);
-    const ignoreDups = (_: any, __: any) => true;
+    tx.executeSql(`CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      createdAt TEXT,
+      type TEXT,
+      payload TEXT
+    );`);
+    const ignoreDups = () => false;
     tx.executeSql(`ALTER TABLE rules ADD COLUMN priority INTEGER`, [], () => {}, ignoreDups);
     tx.executeSql(`ALTER TABLE rules ADD COLUMN cooldownSec INTEGER`, [], () => {}, ignoreDups);
     tx.executeSql(`ALTER TABLE rules ADD COLUMN lastFiredAt TEXT`, [], () => {}, ignoreDups);
@@ -221,6 +227,80 @@ export function expireEffectsBefore(isoCutoff: string): Promise<void> {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
       tx.executeSql(`DELETE FROM effects WHERE expiresAt IS NOT NULL AND expiresAt <= ?`, [isoCutoff], () => resolve(), (_, err) => { reject(err); return false; });
+    });
+  });
+}
+
+type HabitRow = {
+  habit: HabitKey;
+  date: string;
+  streak: number;
+  momentumStacks: number;
+  lastActiveAt: string;
+  decayGraceDays: number;
+};
+
+function mapHabitRow(row: HabitRow): HabitStats {
+  return {
+    habit: row.habit,
+    date: row.date ?? '',
+    streak: row.streak ?? 0,
+    momentumStacks: row.momentumStacks ?? 0,
+    lastActiveAt: row.lastActiveAt ?? row.date ?? '',
+    decayGraceDays: row.decayGraceDays ?? 0,
+  };
+}
+
+export function getHabitStat(habit: HabitKey): Promise<HabitStats | null> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT * FROM habit_stats WHERE habit=?`,
+        [habit],
+        (_, { rows }) => {
+          if (!rows.length) {
+            resolve(null);
+            return;
+          }
+          resolve(mapHabitRow(rows.item(0) as HabitRow));
+        },
+        (_, err) => { reject(err); return false; }
+      );
+    });
+  });
+}
+
+export function setHabitStat(stat: HabitStats): Promise<void> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `INSERT INTO habit_stats (habit, date, streak, momentumStacks, lastActiveAt, decayGraceDays)
+         VALUES (?,?,?,?,?,?)
+         ON CONFLICT(habit) DO UPDATE SET
+           date=excluded.date,
+           streak=excluded.streak,
+           momentumStacks=excluded.momentumStacks,
+           lastActiveAt=excluded.lastActiveAt,
+           decayGraceDays=excluded.decayGraceDays
+        `,
+        [stat.habit, stat.date, stat.streak, stat.momentumStacks, stat.lastActiveAt, stat.decayGraceDays],
+        () => resolve(),
+        (_, err) => { reject(err); return false; }
+      );
+    });
+  });
+}
+
+export function listHabitStats(): Promise<HabitStats[]> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(`SELECT * FROM habit_stats`, [], (_, { rows }) => {
+        const out: HabitStats[] = [];
+        for (let i = 0; i < rows.length; i++) {
+          out.push(mapHabitRow(rows.item(i) as HabitRow));
+        }
+        resolve(out);
+      }, (_, err) => { reject(err); return false; });
     });
   });
 }

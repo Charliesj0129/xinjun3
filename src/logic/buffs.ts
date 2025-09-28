@@ -1,25 +1,11 @@
 import { Resource, StatusEffect } from '@/types';
 import { listEffects, upsertEffectRecord, expireEffectsBefore } from '@/db/db';
-import { clampDelta, ResourceMetricKey } from '@/config/balance';
+import { ResourceMetricKey, DeltaCaps } from '@/config/balance';
 import { resolveBalance } from '@/config/remote';
+import { applyDelta, getMetricLimits, getMetricKeys } from '@/logic/delta';
 
-const METRIC_BOUNDS: Record<ResourceMetricKey, { min:number; max:number }> = {
-  energy: { min: 0, max: 100 },
-  stress: { min: 0, max: 100 },
-  focus: { min: 0, max: 100 },
-  health: { min: 0, max: 100 },
-  sleepDebt: { min: 0, max: 20 },
-  nutritionScore: { min: 0, max: 10 },
-  mood: { min: -5, max: 5 },
-  clarity: { min: 0, max: 5 },
-};
-
-const METRIC_KEYS: ResourceMetricKey[] = Object.keys(METRIC_BOUNDS) as ResourceMetricKey[];
-
-function clampMetric(key: ResourceMetricKey, value: number): number {
-  const bounds = METRIC_BOUNDS[key];
-  return Math.min(bounds.max, Math.max(bounds.min, value));
-}
+const METRIC_LIMITS = getMetricLimits();
+const METRIC_KEYS = getMetricKeys();
 
 function parseDateToMs(date: string | undefined, fallback: number | null = null): number | null {
   if (!date) return fallback;
@@ -56,10 +42,10 @@ export async function expireEffects(nowISO: string): Promise<void> {
   await expireEffectsBefore(nowISO);
 }
 
-export function applyEffects(base: Resource, effects: StatusEffect[]): Resource {
+export function applyEffects(base: Resource, effects: StatusEffect[], guardrailsOverride?: DeltaCaps): Resource {
   if (!effects.length) return base;
   const balance = resolveBalance();
-  const guardrails = balance.guardrails;
+  const guardrails = guardrailsOverride ?? balance.guardrails;
 
   let working: Resource = { ...base };
   const additive: Partial<Record<ResourceMetricKey, number>> = {};
@@ -82,8 +68,7 @@ export function applyEffects(base: Resource, effects: StatusEffect[]): Resource 
   for (const key of METRIC_KEYS) {
     const delta = additive[key];
     if (typeof delta === 'number' && delta !== 0) {
-      const clampedDelta = clampDelta(key, delta, guardrails);
-      const next = clampMetric(key, (working[key] as number) + clampedDelta);
+      const next = applyDelta(working[key] as number, key, delta, { guardrails, limits: METRIC_LIMITS });
       (working as any)[key] = next;
     }
   }
@@ -92,10 +77,9 @@ export function applyEffects(base: Resource, effects: StatusEffect[]): Resource 
     const factor = multiplicative[key];
     if (typeof factor === 'number' && factor !== 1) {
       const before = working[key] as number;
-      const multiplied = clampMetric(key, before * factor);
+      const multiplied = Math.min(METRIC_LIMITS[key].max, Math.max(METRIC_LIMITS[key].min, before * factor));
       const delta = multiplied - before;
-      const clampedDelta = clampDelta(key, delta, guardrails);
-      const next = clampMetric(key, before + clampedDelta);
+      const next = applyDelta(before, key, delta, { guardrails, limits: METRIC_LIMITS });
       (working as any)[key] = next;
     }
   }

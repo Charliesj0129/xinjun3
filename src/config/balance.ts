@@ -2,7 +2,7 @@ import { Resource, UpkeepRule } from '@/types';
 
 export type ResourceMetricKey = keyof Pick<Resource, 'energy'|'stress'|'focus'|'health'|'sleepDebt'|'nutritionScore'|'mood'|'clarity'>;
 
-type DeltaCaps = Record<ResourceMetricKey, number>;
+export type DeltaCaps = Record<ResourceMetricKey, number>;
 
 type MomentumConfig = {
   maxStacks: number;
@@ -27,11 +27,6 @@ export const Guardrails: DeltaCaps = {
   mood: 3,
   clarity: 1,
 };
-
-export function clampDelta(metric: ResourceMetricKey, delta: number, caps: DeltaCaps = Guardrails): number {
-  const cap = caps[metric];
-  return Math.max(-cap, Math.min(cap, delta));
-}
 
 export const Momentum: MomentumConfig = {
   maxStacks: 5,

@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import { Resource, ActionLog, Rule } from '@/types';
+import { Resource, ActionLog, Rule, HabitKey } from '@/types';
 import { upsertResource, insertAction, listActions, getResource } from '@/db/db';
+import { touchHabit } from '@/logic/habits';
+
+const ACTION_HABIT: Partial<Record<ActionLog['type'], HabitKey>> = {
+  exercise: 'exercise',
+  sleep: 'sleep',
+  meal: 'meal',
+  journal: 'journal',
+};
 
 type State = {
   today: string;
@@ -29,6 +37,10 @@ export const useStore = create<State>((set, get) => ({
   setResource: (r) => set(s => ({ resource: { ...s.resource, ...r } })),
   addAction: async (a) => {
     await insertAction(a);
+    const habit = ACTION_HABIT[a.type];
+    if (habit) {
+      await touchHabit(habit, a.date, { now: new Date().toISOString() });
+    }
     set(s => ({ actions: [...s.actions, a] }));
   },
   loadDay: async (date) => {
