@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useStore } from '@/state/store';
+import { useTimelineStore } from '@/state/timelineStore';
 import { settleDay, roomBonus, SettleOptions, finalizeSettlement } from '@/logic/calc';
 import { listActiveEffects } from '@/logic/buffs';
 import { RoomBonus as RoomBonusType, StatusEffect, Resource } from '@/types';
@@ -28,6 +29,7 @@ export default function EndOfDayScreen() {
   const resource = useStore(s => s.resource);
   const actions = useStore(s => s.actions);
   const setResource = useStore(s => s.setResource);
+  const loadTimeline = useTimelineStore(s => s.loadTimeline);
 
   const [roomBonusState, setRoomBonusState] = useState<RoomBonusType>(DEFAULT_ROOM_BONUS);
   const [effects, setEffects] = useState<StatusEffect[]>([]);
@@ -72,6 +74,7 @@ export default function EndOfDayScreen() {
       });
       await upsertResource(settled);
       setResource(settled);
+      await loadTimeline(settled.date);
     } finally {
       setLoading(false);
     }

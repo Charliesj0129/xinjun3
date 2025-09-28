@@ -19,6 +19,7 @@ const METRIC_KEYS: ResourceMetricKey[] = Object.keys(DEFAULT_LIMITS) as Resource
 export type ApplyDeltaOptions = {
   guardrails?: Record<ResourceMetricKey, number>;
   limits?: MetricLimits;
+  onApplied?: (actual: number) => void;
 };
 
 function clampValue(metric: ResourceMetricKey, value: number, limits: MetricLimits = DEFAULT_LIMITS): number {
@@ -27,11 +28,13 @@ function clampValue(metric: ResourceMetricKey, value: number, limits: MetricLimi
 }
 
 export function applyDelta(current: number, metric: ResourceMetricKey, rawDelta: number, options: ApplyDeltaOptions = {}): number {
-  const { guardrails, limits } = options;
+  const { guardrails, limits, onApplied } = options;
   const resolved = guardrails ?? resolveBalance().guardrails;
   const caps = resolved[metric] ?? Number.POSITIVE_INFINITY;
   const clampedDelta = Math.max(-caps, Math.min(caps, rawDelta));
-  return clampValue(metric, current + clampedDelta, limits ?? DEFAULT_LIMITS);
+  const next = clampValue(metric, current + clampedDelta, limits ?? DEFAULT_LIMITS);
+  onApplied?.(next - current);
+  return next;
 }
 
 export function getMetricLimits(): MetricLimits {

@@ -119,3 +119,17 @@ export type GameEvent = {
   type: string;
   payload: Record<string, any>;
 };
+
+type ResourceMetrics = keyof Pick<Resource, 'energy'|'stress'|'focus'|'health'|'sleepDebt'|'nutritionScore'|'mood'|'clarity'>;
+
+export type TimelineDelta = Partial<Record<ResourceMetrics, number>>;
+
+export type TimelineEntry = {
+  id: string;
+  at: string;
+  kind: 'action'|'event'|'buffOn'|'buffOff';
+  refId: string;
+  actionType?: ActionLog['type'];
+  choiceId?: string;
+  delta?: TimelineDelta;
+};

@@ -1,4 +1,4 @@
-import { EventCard, EventChoice, EventRequirement, Resource } from '@/types';
+import { EventCard, EventChoice, EventRequirement, Resource, TimelineDelta } from '@/types';
 import { resolveBalance } from '@/config/remote';
 import { applyDelta, getMetricKeys, getMetricLimits } from '@/logic/delta';
 
@@ -20,19 +20,30 @@ export function matchesRequirements(card: EventCard, resource: Resource): boolea
   });
 }
 
-export function applyEventChoice(base: Resource, choice: EventChoice): Resource {
+export function applyEventChoice(base: Resource, choice: EventChoice, onApplied?: (delta: TimelineDelta) => void): Resource {
   const balance = resolveBalance();
   const guardrails = balance.guardrails;
   const next: Resource = { ...base };
+  const deltaAccumulator: TimelineDelta = {};
 
   METRIC_KEYS.forEach((key) => {
     const rawDelta = choice.effects[key];
     if (typeof rawDelta === 'number') {
       const current = next[key] as number;
-      const updated = applyDelta(current, key, rawDelta, { guardrails, limits: METRIC_LIMITS });
+      const updated = applyDelta(current, key, rawDelta, {
+        guardrails,
+        limits: METRIC_LIMITS,
+        onApplied: amt => {
+          deltaAccumulator[key] = (deltaAccumulator[key] ?? 0) + amt;
+        }
+      });
       next[key] = updated as Resource[typeof key];
     }
   });
+
+  if (onApplied && Object.keys(deltaAccumulator).length) {
+    onApplied(deltaAccumulator);
+  }
 
   return next;
 }

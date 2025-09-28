@@ -2,6 +2,7 @@ import { HabitKey, HabitStats, Resource, StatusEffect } from '@/types';
 import { getHabitStat, setHabitStat, listHabitStats, listEffects, upsertEffectRecord, deleteEffect } from '@/db/db';
 import { appendEvent } from '@/db/events';
 import { resolveBalance } from '@/config/remote';
+import { logTimeline } from '@/logic/timeline';
 
 const MOMENTUM_EFFECT_ID = 'buff_momentum';
 
@@ -69,6 +70,7 @@ async function syncMomentumEffect(date: string): Promise<void> {
     if (current) {
       await deleteEffect(MOMENTUM_EFFECT_ID);
       await appendEvent('effect.remove', { effectId: MOMENTUM_EFFECT_ID, date });
+      await logTimeline({ kind: 'buffOff', refId: MOMENTUM_EFFECT_ID, at: new Date().toISOString() });
     }
     return;
   }
@@ -78,6 +80,7 @@ async function syncMomentumEffect(date: string): Promise<void> {
   if (hasChanged) {
     await upsertEffectRecord(date, nextEffect);
     await appendEvent('effect.upsert', { effectId: MOMENTUM_EFFECT_ID, stacks: totalStacks, date });
+    await logTimeline({ kind: 'buffOn', refId: MOMENTUM_EFFECT_ID, at: new Date().toISOString() });
   }
 }
 

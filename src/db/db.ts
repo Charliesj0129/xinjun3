@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { Resource, ActionLog, RoomState, Rule, StatusEffect, HabitKey, HabitStats } from '@/types';
+import { Resource, ActionLog, RoomState, Rule, StatusEffect, HabitKey, HabitStats, TimelineEntry, TimelineDelta } from '@/types';
 
 const db = SQLite.openDatabase('xinjun3.db');
 export const database = db;
@@ -48,6 +48,15 @@ export function initDb() {
       createdAt TEXT,
       type TEXT,
       payload TEXT
+    );`);
+    tx.executeSql(`CREATE TABLE IF NOT EXISTS timeline (
+      id TEXT PRIMARY KEY,
+      at TEXT,
+      kind TEXT,
+      refId TEXT,
+      actionType TEXT,
+      choiceId TEXT,
+      delta TEXT
     );`);
     const ignoreDups = () => false;
     tx.executeSql(`ALTER TABLE rules ADD COLUMN priority INTEGER`, [], () => {}, ignoreDups);
@@ -301,6 +310,85 @@ export function listHabitStats(): Promise<HabitStats[]> {
         }
         resolve(out);
       }, (_, err) => { reject(err); return false; });
+    });
+  });
+}
+
+type TimelineRow = {
+  id: string;
+  at: string;
+  kind: string;
+  refId: string;
+  actionType?: string;
+  choiceId?: string;
+  delta?: string;
+};
+
+function mapTimelineRow(row: TimelineRow): TimelineEntry {
+  let delta: TimelineDelta | undefined;
+  if (row.delta) {
+    try {
+      delta = JSON.parse(row.delta) as TimelineDelta;
+    } catch (err) {
+      delta = undefined;
+    }
+  }
+  return {
+    id: row.id,
+    at: row.at,
+    kind: row.kind as TimelineEntry['kind'],
+    refId: row.refId,
+    actionType: row.actionType ?? undefined,
+    choiceId: row.choiceId ?? undefined,
+    delta,
+  };
+}
+
+export function insertTimelineEntry(entry: TimelineEntry): Promise<void> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `INSERT INTO timeline (id, at, kind, refId, actionType, choiceId, delta)
+         VALUES (?,?,?,?,?,?,?)`,
+        [
+          entry.id,
+          entry.at,
+          entry.kind,
+          entry.refId,
+          entry.actionType ?? null,
+          entry.choiceId ?? null,
+          entry.delta ? JSON.stringify(entry.delta) : null,
+        ],
+        () => resolve(),
+        (_, err) => { reject(err); return false; }
+      );
+    });
+  });
+}
+
+export function listTimeline(date: string, limit = 200): Promise<TimelineEntry[]> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        `SELECT * FROM timeline WHERE substr(at,1,10)=? ORDER BY at ASC LIMIT ?`,
+        [date, limit],
+        (_, { rows }) => {
+          const out: TimelineEntry[] = [];
+          for (let i = 0; i < rows.length; i++) {
+            out.push(mapTimelineRow(rows.item(i) as TimelineRow));
+          }
+          resolve(out);
+        },
+        (_, err) => { reject(err); return false; }
+      );
+    });
+  });
+}
+
+export function clearTimeline(date: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(`DELETE FROM timeline WHERE substr(at,1,10)=?`, [date], () => resolve(), (_, err) => { reject(err); return false; });
     });
   });
 }
