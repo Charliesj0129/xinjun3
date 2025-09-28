@@ -11,9 +11,10 @@ export type QueuedEvent = {
 type EventQueueState = {
   entries: QueuedEvent[];
   chainProgress: Record<string, number>;
+  crisisDeliveredDay?: string;
 };
 
-const state: EventQueueState = { entries: [], chainProgress: {} };
+const state: EventQueueState = { entries: [], chainProgress: {}, crisisDeliveredDay: undefined };
 
 export function enqueueEvent(entry: QueuedEvent) {
   state.entries.push(entry);
@@ -27,10 +28,23 @@ export function dequeueExpired(nowIso: string) {
   });
 }
 
-export function takeQueued(nowIso: string): QueuedEvent | undefined {
+export function takeQueued(nowIso: string, dayId: string): QueuedEvent | undefined {
   dequeueExpired(nowIso);
-  const next = state.entries.shift();
-  return next;
+  if (state.crisisDeliveredDay && state.crisisDeliveredDay !== dayId) {
+    state.crisisDeliveredDay = undefined;
+  }
+  for (let i = 0; i < state.entries.length; i++) {
+    const entry = state.entries[i];
+    if (entry.reason === 'crisis' && state.crisisDeliveredDay === dayId) {
+      continue;
+    }
+    state.entries.splice(i, 1);
+    if (entry.reason === 'crisis') {
+      state.crisisDeliveredDay = dayId;
+    }
+    return entry;
+  }
+  return undefined;
 }
 
 export function queueChain(chain: EventChainMeta, nowIso: string) {
@@ -53,6 +67,7 @@ export function queueCrisis(rescueIds: string[], nowIso: string) {
 export function clearQueue() {
   state.entries = [];
   state.chainProgress = {};
+  state.crisisDeliveredDay = undefined;
 }
 
 export function getQueue() {

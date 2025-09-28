@@ -77,9 +77,11 @@ export function selectEventCard(
   resource: Resource,
   deck: EventCard[] = DailyEvents,
   seed: string = date,
+  difficultyMode: 'ease'|'normal'|'elite' = 'normal',
 ): EventSelection | null {
   const nowIso = new Date().toISOString();
-  let queued = takeQueued(nowIso);
+  const dayId = date;
+  let queued = takeQueued(nowIso, dayId);
   while (queued) {
     const card = deck.find(c => c.id === queued.id);
     if (card && matchesRequirements(card, resource)) {
@@ -91,7 +93,7 @@ export function selectEventCard(
       }
       return { card, source: 'queue' };
     }
-    queued = takeQueued(nowIso);
+    queued = takeQueued(nowIso, dayId);
   }
 
   const weekday = new Date(date).getDay();
@@ -108,10 +110,22 @@ export function selectEventCard(
   if (filtered.length === 0) return null;
 
   const rng = createSeededRng(hashSeed(seed));
-  const totalWeight = filtered.reduce((sum, card) => sum + weightFor(card), 0);
+  const totalWeight = filtered.reduce((sum, card) => {
+    let weight = weightFor(card);
+    if (difficultyMode === 'ease') {
+      if (card.crisis) weight *= 0.8;
+      if (card.rescue) weight *= 1.2;
+    }
+    return sum + weight;
+  }, 0);
   let roll = rng() * totalWeight;
   for (const card of filtered) {
-    roll -= weightFor(card);
+    let weight = weightFor(card);
+    if (difficultyMode === 'ease') {
+      if (card.crisis) weight *= 0.8;
+      if (card.rescue) weight *= 1.2;
+    }
+    roll -= weight;
     if (roll <= 0) {
       if (card.chain) {
         queueChain(card.chain, nowIso);

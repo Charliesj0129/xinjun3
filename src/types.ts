@@ -68,6 +68,7 @@ export type EventCard = {
   requires?: EventRequirement[];
   chain?: EventChainMeta;
   crisis?: EventCrisisMeta;
+  rescue?: boolean;
   choices: EventChoice[];
 };
 
