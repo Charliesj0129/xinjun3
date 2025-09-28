@@ -139,10 +139,22 @@ export type BuildId = 'scholar'|'champion'|'zen'|'builder';
 export type PrestigeState = {
   level: number;
   keystones: string[];
+  perfectDays: number;
   caps: {
     energy: number;
     focus: number;
     stress: number;
     health: number;
   };
+};
+
+export type ShardType = 'focusShard'|'clarityShard';
+
+export type RitualRecipe = {
+  id: string;
+  name: string;
+  description: string;
+  inputs: ShardType[];
+  cooldownHours: number;
+  effect: StatusEffect;
 };

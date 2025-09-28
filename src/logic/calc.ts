@@ -7,6 +7,7 @@ import { applyEntropy, enforceUpkeep } from '@/logic/habits';
 import { DeltaCaps, ResourceMetricKey } from '@/config/balance';
 import { createDeltaTracker, TimelineContext, logTimeline } from '@/logic/timeline';
 import { getBuild } from '@/config/builds';
+import { aggregateKeystoneModifiers } from '@/logic/prestige';
 
 export type SettleOptions = {
   effects?: StatusEffect[];
@@ -15,6 +16,7 @@ export type SettleOptions = {
   onTimeline?: (ctx: TimelineContext) => void;
   buildId?: BuildId;
   caps?: Partial<Record<'energy'|'focus'|'stress'|'health', number>>;
+  keystones?: string[];
 };
 
 export type FinalizeOptions = SettleOptions & {
@@ -43,7 +45,14 @@ export function settleDay(current: Resource, actions: ActionLog[], options: Sett
   const bonus = options.roomBonus ?? ZERO_BONUS;
   const emitTimeline = options.onTimeline;
   const build = getBuild(options.buildId ?? 'scholar');
-  const modifiers = build.modifiers;
+  const keystoneMods = aggregateKeystoneModifiers(options.keystones ?? []);
+  const modifiers = {
+    focusGainMult: build.modifiers.focusGainMult * keystoneMods.focusGainMult,
+    stressIncreaseMult: build.modifiers.stressIncreaseMult * keystoneMods.stressIncreaseMult,
+    sleepGainMult: build.modifiers.sleepGainMult * keystoneMods.sleepGainMult,
+    nutritionGainMult: build.modifiers.nutritionGainMult * keystoneMods.nutritionGainMult,
+    journalClarityGain: build.modifiers.journalClarityGain * keystoneMods.journalClarityGain,
+  };
 
   const limits = Object.fromEntries(
     Object.entries(METRIC_LIMITS).map(([k, bounds]) => [k, { ...bounds }])

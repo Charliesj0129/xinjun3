@@ -1,6 +1,9 @@
 import { EventCard, EventChoice, EventRequirement, Resource, TimelineDelta } from '@/types';
 import { resolveBalance } from '@/config/remote';
 import { applyDelta, getMetricKeys, getMetricLimits } from '@/logic/delta';
+import { DailyEvents } from '@/data/events';
+import { takeQueued, queueChain, queueCrisis, getChainStage } from '@/logic/eventQueue';
+import { createSeededRng, hashSeed } from '@/utils/prng';
 
 const METRIC_KEYS = getMetricKeys();
 const METRIC_LIMITS = getMetricLimits();
@@ -46,4 +49,86 @@ export function applyEventChoice(base: Resource, choice: EventChoice, onApplied?
   }
 
   return next;
+}
+
+function weekdayMatches(card: EventCard, weekday: number) {
+  if (!card.weekday || card.weekday.length === 0) return true;
+  return card.weekday.includes(weekday);
+}
+
+const RARITY_WEIGHT: Record<NonNullable<EventCard['rarity']>, number> = {
+  common: 0.7,
+  uncommon: 0.25,
+  rare: 0.05,
+};
+
+function weightFor(card: EventCard) {
+  if (!card.rarity) return 0.7;
+  return RARITY_WEIGHT[card.rarity] ?? 0.7;
+}
+
+export type EventSelection = {
+  card: EventCard;
+  source: 'queue'|'random';
+};
+
+export function selectEventCard(
+  date: string,
+  resource: Resource,
+  deck: EventCard[] = DailyEvents,
+  seed: string = date,
+): EventSelection | null {
+  const nowIso = new Date().toISOString();
+  let queued = takeQueued(nowIso);
+  while (queued) {
+    const card = deck.find(c => c.id === queued.id);
+    if (card && matchesRequirements(card, resource)) {
+      if (card.chain) {
+        queueChain(card.chain, nowIso);
+      }
+      if (card.crisis) {
+        queueCrisis(card.crisis.rescueIds, nowIso);
+      }
+      return { card, source: 'queue' };
+    }
+    queued = takeQueued(nowIso);
+  }
+
+  const weekday = new Date(date).getDay();
+  const filtered = deck.filter(card => {
+    if (!weekdayMatches(card, weekday)) return false;
+    if (!matchesRequirements(card, resource)) return false;
+    if (card.chain) {
+      const stage = getChainStage(card.chain.chainId);
+      if (card.chain.stage && card.chain.stage > stage + 1) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) return null;
+
+  const rng = createSeededRng(hashSeed(seed));
+  const totalWeight = filtered.reduce((sum, card) => sum + weightFor(card), 0);
+  let roll = rng() * totalWeight;
+  for (const card of filtered) {
+    roll -= weightFor(card);
+    if (roll <= 0) {
+      if (card.chain) {
+        queueChain(card.chain, nowIso);
+      }
+      if (card.crisis) {
+        queueCrisis(card.crisis.rescueIds, nowIso);
+      }
+      return { card, source: 'random' };
+    }
+  }
+
+  const fallback = filtered[filtered.length - 1];
+  if (fallback.chain) {
+    queueChain(fallback.chain, nowIso);
+  }
+  if (fallback.crisis) {
+    queueCrisis(fallback.crisis.rescueIds, nowIso);
+  }
+  return { card: fallback, source: 'random' };
 }

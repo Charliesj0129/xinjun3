@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, AccessibilityInfo, Animated } from 'react-native';
 import { useStore } from '@/state/store';
 import { useTimelineStore } from '@/state/timelineStore';
 import { settleDay, roomBonus, SettleOptions, finalizeSettlement } from '@/logic/calc';
 import { listActiveEffects } from '@/logic/buffs';
 import { RoomBonus as RoomBonusType, StatusEffect, Resource } from '@/types';
 import { upsertResource } from '@/db/db';
+import { processPerfectDay } from '@/logic/prestige';
 
 const METRICS: Array<keyof Pick<Resource, 'energy'|'stress'|'focus'|'health'|'sleepDebt'|'nutritionScore'|'mood'|'clarity'>> = [
   'energy',
@@ -31,11 +32,16 @@ export default function EndOfDayScreen() {
   const setResource = useStore(s => s.setResource);
   const buildId = useStore(s => s.buildId);
   const prestigeCaps = useStore(s => s.prestige.caps);
+  const keystones = useStore(s => s.prestige.keystones);
+  const setPrestige = useStore(s => s.setPrestige);
+  const addShard = useStore(s => s.addShard);
   const loadTimeline = useTimelineStore(s => s.loadTimeline);
 
   const [roomBonusState, setRoomBonusState] = useState<RoomBonusType>(DEFAULT_ROOM_BONUS);
   const [effects, setEffects] = useState<StatusEffect[]>([]);
   const [loading, setLoading] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const animation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let mounted = true;
@@ -52,10 +58,29 @@ export default function EndOfDayScreen() {
     return () => { mounted = false; };
   }, [resource.date]);
 
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(value => {
+      setReduceMotion(value);
+      if (value) {
+        animation.setValue(1);
+      }
+    });
+    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
+    return () => {
+      subscription?.remove?.();
+    };
+  }, [animation]);
+
+  useEffect(() => {
+    if (!reduceMotion) {
+      animation.setValue(1);
+    }
+  }, [animation, reduceMotion]);
+
   const preview = useMemo(() => {
-    const options: SettleOptions = { effects, roomBonus: roomBonusState, buildId, caps: prestigeCaps };
+    const options: SettleOptions = { effects, roomBonus: roomBonusState, buildId, caps: prestigeCaps, keystones };
     return settleDay(resource, actions, options);
-  }, [resource, actions, effects, roomBonusState, buildId, prestigeCaps]);
+  }, [resource, actions, effects, roomBonusState, buildId, prestigeCaps, keystones]);
 
   const deltas = useMemo(() => {
     const diff: Record<string, number> = {};
@@ -64,6 +89,10 @@ export default function EndOfDayScreen() {
     });
     return diff;
   }, [preview, resource]);
+
+  const isPerfectDay = (res: Resource) => {
+    return res.energy >= 80 && res.focus >= 80 && res.stress <= 40 && res.sleepDebt <= 2 && res.nutritionScore >= 7;
+  };
 
   async function handleSettle() {
     if (loading) return;
@@ -75,10 +104,21 @@ export default function EndOfDayScreen() {
         actionsCount: actions.length,
         buildId,
         caps: prestigeCaps,
+        keystones,
       });
       await upsertResource(settled);
       setResource(settled);
       await loadTimeline(settled.date);
+      if (settled.focus >= 85) addShard('focusShard', 1);
+      if (settled.clarity >= 3) addShard('clarityShard', 1);
+      const perfect = isPerfectDay(settled);
+      if (perfect) {
+        setPrestige(prev => processPerfectDay(prev).next);
+      }
+      if (!reduceMotion) {
+        animation.setValue(0);
+        Animated.timing(animation, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+      }
     } finally {
       setLoading(false);
     }
@@ -88,7 +128,7 @@ export default function EndOfDayScreen() {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>今日結算預覽</Text>
-        <View style={styles.card}>
+        <Animated.View style={[styles.card, !reduceMotion && { transform: [{ scale: animation.interpolate({ inputRange:[0,1], outputRange:[0.98,1] }) }], opacity: reduceMotion ? 1 : animation.interpolate({ inputRange:[0,1], outputRange:[0.6,1] }) }] }>
           {METRICS.map(key => (
             <View key={key} style={styles.metricRow}>
               <Text style={styles.metricLabel}>{key}</Text>
@@ -101,7 +141,7 @@ export default function EndOfDayScreen() {
               </View>
             </View>
           ))}
-        </View>
+        </Animated.View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>房間加成</Text>
