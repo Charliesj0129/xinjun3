@@ -84,7 +84,10 @@ export default function AnalyticsScreen() {
 }
 
 function withinDays(ref: string, date: string, days: number) {
-  const diff = (Date.parse(toISO(ref)) - Date.parse(date)) / (1000 * 60 * 60 * 24);
+  const reference = Date.parse(toISO(ref));
+  const parsed = Date.parse(date.length === 10 ? `${date}T00:00:00+08:00` : date);
+  if (Number.isNaN(reference) || Number.isNaN(parsed)) return false;
+  const diff = (reference - parsed) / (1000 * 60 * 60 * 24);
   return diff >= 0 && diff < days;
 }
 
@@ -134,7 +137,7 @@ function buildSuggestion(resources: Resource[], history: PerfectEntry[]) {
   if (latest.stress > 60) {
     return '午休 20 分鐘 + 伸展 3 分鐘，下午會更清醒。';
   }
-  const recent = history.filter(entry => (Date.now() - Date.parse(entry.date)) / (1000 * 60 * 60 * 24) < 7);
+  const recent = history.filter(entry => withinDays(new Date().toISOString().slice(0,10), entry.date, 7));
   const rate = recent.length ? recent.filter(r => r.perfect).length / recent.length : 0;
   if (latest.focus >= 80 && rate >= 0.6) {
     return '明天安排 90 分鐘深度任務，衝一波最高手感。';

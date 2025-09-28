@@ -129,12 +129,18 @@ export const useStore = create<State>((set, get) => ({
     return true;
   },
   recordPerfectDay: (dateIso, perfect) => set(s => {
-    const trimmed = s.perfectDayHistory.filter(entry => Date.parse(dateIso) - Date.parse(entry.date) <= 14 * 24 * 60 * 60 * 1000);
+    const limit = 14 * 24 * 60 * 60 * 1000;
+    const trimmed = s.perfectDayHistory.filter(entry => {
+      const parsed = Date.parse(entry.date.length === 10 ? `${entry.date}T00:00:00+08:00` : entry.date);
+      return !Number.isNaN(parsed) && Date.parse(dateIso) - parsed <= limit;
+    });
     return { perfectDayHistory: [...trimmed, { date: dateIso, perfect }] };
   }),
   evaluateDifficulty: (dateIso) => {
     const history = get().perfectDayHistory.filter(entry => {
-      const diff = (Date.parse(dateIso) - Date.parse(entry.date)) / (1000 * 60 * 60 * 24);
+      const parsed = Date.parse(entry.date.length === 10 ? `${entry.date}T00:00:00+08:00` : entry.date);
+      if (Number.isNaN(parsed)) return false;
+      const diff = (Date.parse(dateIso) - parsed) / (1000 * 60 * 60 * 24);
       return diff >= 0 && diff < 7;
     });
     const rate = history.length === 0 ? 0 : history.filter(h => h.perfect).length / history.length;
