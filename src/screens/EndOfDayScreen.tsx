@@ -29,6 +29,8 @@ export default function EndOfDayScreen() {
   const resource = useStore(s => s.resource);
   const actions = useStore(s => s.actions);
   const setResource = useStore(s => s.setResource);
+  const buildId = useStore(s => s.buildId);
+  const prestigeCaps = useStore(s => s.prestige.caps);
   const loadTimeline = useTimelineStore(s => s.loadTimeline);
 
   const [roomBonusState, setRoomBonusState] = useState<RoomBonusType>(DEFAULT_ROOM_BONUS);
@@ -51,9 +53,9 @@ export default function EndOfDayScreen() {
   }, [resource.date]);
 
   const preview = useMemo(() => {
-    const options: SettleOptions = { effects, roomBonus: roomBonusState };
+    const options: SettleOptions = { effects, roomBonus: roomBonusState, buildId, caps: prestigeCaps };
     return settleDay(resource, actions, options);
-  }, [resource, actions, effects, roomBonusState]);
+  }, [resource, actions, effects, roomBonusState, buildId, prestigeCaps]);
 
   const deltas = useMemo(() => {
     const diff: Record<string, number> = {};
@@ -71,6 +73,8 @@ export default function EndOfDayScreen() {
         effects,
         roomBonus: roomBonusState,
         actionsCount: actions.length,
+        buildId,
+        caps: prestigeCaps,
       });
       await upsertResource(settled);
       setResource(settled);

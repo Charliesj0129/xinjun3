@@ -133,3 +133,16 @@ export type TimelineEntry = {
   choiceId?: string;
   delta?: TimelineDelta;
 };
+
+export type BuildId = 'scholar'|'champion'|'zen'|'builder';
+
+export type PrestigeState = {
+  level: number;
+  keystones: string[];
+  caps: {
+    energy: number;
+    focus: number;
+    stress: number;
+    health: number;
+  };
+};
