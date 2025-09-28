@@ -422,3 +422,60 @@ export function listResourcesInRange(startDate: string, endDate: string): Promis
     });
   });
 }
+
+export function listAllResources(): Promise<Resource[]> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(`SELECT * FROM resources ORDER BY date ASC`, [], (_, { rows }) => {
+        const out: Resource[] = [];
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows.item(i);
+          out.push({
+            date: r.date,
+            energy: r.energy,
+            stress: r.stress,
+            focus: r.focus,
+            health: r.health,
+            sleepDebt: r.sleepDebt,
+            nutritionScore: r.nutritionScore,
+            mood: r.mood,
+            clarity: r.clarity,
+          });
+        }
+        resolve(out);
+      }, (_, err) => { reject(err); return false; });
+    });
+  });
+}
+
+export function listAllActions(): Promise<ActionLog[]> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(`SELECT * FROM actions ORDER BY date ASC`, [], (_, { rows }) => {
+        const out: ActionLog[] = [];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows.item(i);
+          out.push({
+            id: row.id,
+            date: row.date,
+            type: row.type,
+            payload: row.payload ? JSON.parse(row.payload) : {},
+          });
+        }
+        resolve(out);
+      }, (_, err) => { reject(err); return false; });
+    });
+  });
+}
+
+export function clearAllData(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(`DELETE FROM resources`);
+      tx.executeSql(`DELETE FROM actions`);
+      tx.executeSql(`DELETE FROM timeline`);
+      tx.executeSql(`DELETE FROM effects`);
+      tx.executeSql(`DELETE FROM habit_stats`);
+    }, err => reject(err), () => resolve());
+  });
+}

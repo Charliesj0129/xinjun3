@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "echo \"(optional) add eslint\"",
-    "verify-spec": "node scripts/verify-spec.js"
+    "verify-spec": "node scripts/verify-spec.js",
+    "plugin-lint": "node scripts/plugin-lint.js"
   },
   "dependencies": {
     "expo": "^52.0.0",

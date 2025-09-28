@@ -1,0 +1,8 @@
+{
+  "id": "plugin.study",
+  "name": "學習模組",
+  "version": "1.0.0",
+  "description": "新增專注番茄工具與頁面。",
+  "safe": true,
+  "permissions": []
+}
